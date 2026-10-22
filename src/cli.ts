@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { realpathSync } from 'node:fs';
 import { RealGitReader } from './git/RealGitReader.js';
 import { loadConfig, mergeConfig } from './config.js';
 import { generateChangelog } from './engine.js';
@@ -171,10 +172,21 @@ export async function run(argv: string[]): Promise<number> {
   return 0;
 }
 
-const isMainModule =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+/**
+ * True when this module is the process entry point. npm installs `bin` entries
+ * as symlinks (node_modules/.bin, npx, npm link), so compare real paths; a
+ * plain URL comparison made the installed CLI exit 0 without doing anything.
+ */
+export function isEntryPoint(argv1: string | undefined, moduleUrl: string): boolean {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
 
-if (isMainModule) {
+if (isEntryPoint(process.argv[1], import.meta.url)) {
   run(process.argv.slice(2))
     .then((code) => {
       process.exitCode = code;

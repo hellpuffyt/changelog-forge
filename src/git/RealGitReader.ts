@@ -9,12 +9,29 @@ const execFileAsync = promisify(execFile);
 const FIELD_SEP = '\x1f';
 const RECORD_SEP = '\x1e';
 
+/**
+ * Rejects a user-supplied revision that git could read as an option.
+ *
+ * `--from`/`--to` used to be passed straight to `git log`, so a value such as
+ * `--output=/some/file` made git write an arbitrary file. Refs are also passed
+ * after `--end-of-options`, so this check is defence in depth and gives a
+ * clear error message.
+ */
+export function assertSafeRef(ref: string): void {
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what is rejected
+  if (ref.length === 0 || ref.startsWith('-') || /[\x00-\x20\x7f]/.test(ref)) {
+    throw new Error(`refusing unsafe git revision ${JSON.stringify(ref)}: revisions may not be empty, start with "-", or contain whitespace/control characters`);
+  }
+}
+
 /** A GitReader backed by the system `git` binary, run against a real repository on disk. */
 export class RealGitReader implements GitReader {
   constructor(private readonly cwd: string) {}
 
   private async git(args: string[]): Promise<string> {
-    const { stdout } = await execFileAsync('git', args, {
+    // Repository config must not be able to make a read-only command run
+    // programs (e.g. log.showSignature invoking gpg.program).
+    const { stdout } = await execFileAsync('git', ['-c', 'log.showSignature=false', ...args], {
       cwd: this.cwd,
       maxBuffer: 1024 * 1024 * 64,
     });
@@ -52,9 +69,18 @@ export class RealGitReader implements GitReader {
   }
 
   async getCommits(range: CommitRange): Promise<RawCommit[]> {
+    if (range.from) assertSafeRef(range.from);
+    assertSafeRef(range.to);
     const rangeArg = range.from ? `${range.from}..${range.to}` : range.to;
     const format = `%H${FIELD_SEP}%h${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%B${RECORD_SEP}`;
-    const stdout = await this.git(['log', rangeArg, `--format=${format}`, '--no-color']);
+    const stdout = await this.git([
+      'log',
+      `--format=${format}`,
+      '--no-color',
+      '--end-of-options',
+      rangeArg,
+      '--',
+    ]);
     const records = stdout.split(RECORD_SEP).filter((r) => r.trim().length > 0);
     const commits: RawCommit[] = [];
     for (const record of records) {
@@ -75,7 +101,8 @@ export class RealGitReader implements GitReader {
   }
 
   async resolveRef(ref: string): Promise<string> {
-    const stdout = await this.git(['rev-parse', ref]);
+    assertSafeRef(ref);
+    const stdout = await this.git(['rev-parse', '--verify', '--end-of-options', ref]);
     return stdout.trim();
   }
 }
