@@ -84,9 +84,19 @@ src/
 
 ## Installation
 
+This project is **not published to npm**. The `changelog-forge` package on the npm
+registry is an unrelated project by another author — do not `npm install` it or run
+`npx changelog-forge` expecting this tool. Install from a clone:
+
 ```bash
-npm install --save-dev changelog-forge
+git clone https://github.com/hellpuffyt/changelog-forge
+cd changelog-forge
+npm ci && npm run build
+npm link            # puts `changelog-forge` on your PATH
 ```
+
+The `npx changelog-forge ...` lines below assume the linked command; run
+`changelog-forge ...` (or `node dist/cli.js ...`) instead.
 
 Requires Node.js `^20 || ^22 || >=24` and the `git` binary on `PATH`.
 
@@ -214,7 +224,7 @@ shape (`version`, `bump`, `date`, `from`, `to`, `sections[].groups[].entries[]`,
 ## Testing
 
 ```bash
-npm test          # vitest run — 139 tests
+npm test          # vitest run — 144 tests
 npx tsc --noEmit   # strict type-check
 npx eslint .        # zero errors, zero warnings
 ```
@@ -230,7 +240,12 @@ the in-memory `FixtureGitReader` — no repository required. `test/git/RealGitRe
   for-each-ref`, `git rev-parse`); it never writes to git history or pushes anything.
 - The only file it writes is the output file you specify via `--out` or `--prepend`.
 - Config files are parsed as plain JSON (`JSON.parse`), not evaluated as code.
-- Report a security issue by opening a private security advisory on the repository rather than
+- git is run with `execFile` (no shell) and a fixed argument list. `--from`/`--to`
+  values are rejected if they start with `-` or contain whitespace/control characters,
+  and are passed after `--end-of-options`, so input can never become a git option (such
+  as `--output=<file>`). `log.showSignature` is forced off so a repository's config
+  cannot make `git log` run a signature program.
+- Report a security issue privately as described in [SECURITY.md](SECURITY.md) rather than in
   a public issue.
 
 ## License
