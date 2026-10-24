@@ -37,7 +37,8 @@ that doesn't lead with what breaks isn't doing its job.
   by **semver ordering**, not tag creation date (which is wrong when tags are pushed out of
   order — e.g. a `1.2.0` hotfix tag pushed after a `1.3.0-rc.1` prerelease tag).
 - **Revert cancellation**: a commit and its revert, when both are in the range, cancel out
-  instead of both appearing.
+  instead of both appearing. Both `revert: <header>` and the default `git revert` message
+  (`Revert "<header>"` + `This reverts commit <sha>.`) are recognised.
 - **Link generation** for commit SHAs, PR numbers (`(#123)` in the subject), and issue
   references, from a configurable repository URL.
 - **Contributor list**, deduplicated by email, with bots excluded by configurable pattern.
@@ -197,6 +198,12 @@ _Recommended bump: **major**._
 
   responses are now wrapped in a `data` key.
 
+### Bug Fixes
+
+#### auth
+
+- handle expired session (#12) ([#12](https://github.com/owner/repo/pull/12) [`4626081`](https://github.com/owner/repo/commit/4626081...))
+
 ### Performance Improvements
 
 #### db
@@ -208,8 +215,8 @@ _Recommended bump: **major**._
 - Demo User
 ```
 
-Note that the `fix(auth)` commit above the tag boundary and the breaking `feat` commit are
-ordered by impact, not commit date — breaking changes always lead.
+Note that the newest commit (`fix(auth)`) is not listed first: sections are ordered by
+impact, not commit date — breaking changes always lead.
 
 ## Output format
 
@@ -224,7 +231,7 @@ shape (`version`, `bump`, `date`, `from`, `to`, `sections[].groups[].entries[]`,
 ## Testing
 
 ```bash
-npm test          # vitest run — 144 tests
+npm test          # vitest run — 145 tests
 npx tsc --noEmit   # strict type-check
 npx eslint .        # zero errors, zero warnings
 ```

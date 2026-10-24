@@ -22,6 +22,17 @@ describe('cancelReverts', () => {
     expect(result).toEqual([other]);
   });
 
+  it("cancels a commit against git revert's default 'Revert \"...\"' message", () => {
+    const original = commit('a'.repeat(40), 'feat(api): add experimental cache');
+    const revert = commit(
+      'b'.repeat(40),
+      `Revert "feat(api): add experimental cache"\n\nThis reverts commit ${'a'.repeat(40)}.`
+    );
+    expect(revert.section).toBe('revert');
+    expect(revert.subject).toBe('feat(api): add experimental cache');
+    expect(cancelReverts([revert, original])).toEqual([]);
+  });
+
   it('matches a revert by short sha', () => {
     const original = commit('a'.repeat(40), 'feat: add thing');
     const revert = commit(

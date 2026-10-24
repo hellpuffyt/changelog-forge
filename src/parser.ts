@@ -8,6 +8,8 @@ const FOOTER_LINE_RE = /^(BREAKING CHANGE|BREAKING-CHANGE|[A-Za-z0-9][A-Za-z0-9-
 const PR_REF_RE = /\(#(\d+)\)/g;
 const ISSUE_REF_RE = /#(\d+)/g;
 const REVERTS_RE = /This reverts commit ([0-9a-f]{7,40})/i;
+// The header `git revert` writes by default: Revert "<original header>".
+const GIT_REVERT_HEADER_RE = /^Revert "(.+)"$/;
 
 const SECTION_BY_TYPE: Record<string, CommitSection> = {
   feat: 'feat',
@@ -40,7 +42,12 @@ export function parseCommit(raw: RawCommit): ParseResult {
 
   const lines = message.split('\n');
   const headerLine = lines[0] ?? '';
-  const headerMatch = HEADER_RE.exec(headerLine.trim());
+  const gitRevert = GIT_REVERT_HEADER_RE.exec(headerLine.trim());
+  // Treat `git revert`'s default header as `revert: <original header>` when the body names the
+  // reverted commit, so it cancels against (or is listed as reverting) its target like any revert.
+  const normalizedHeader =
+    gitRevert?.[1] !== undefined && REVERTS_RE.test(message) ? `revert: ${gitRevert[1]}` : headerLine;
+  const headerMatch = HEADER_RE.exec(normalizedHeader.trim());
   if (!headerMatch) {
     return { ok: false, skipped: { raw, reason: 'header does not match "type(scope)!: subject"' } };
   }
