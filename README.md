@@ -3,6 +3,8 @@
 Generate a release changelog from conventional commits, grouped by impact, with breaking
 changes surfaced first.
 
+<img src="docs/assets/overview.svg" width="100%" alt="Data-flow diagram: RealGitReader reads tags and commits from git; engine.ts finds the previous tag by semver, parses conventional commits, cancels reverts, infers the bump, groups by impact and scope, and collects contributors; the result is rendered as Markdown or JSON to stdout, a file, or prepended into CHANGELOG.md">
+
 ## What
 
 `changelog-forge` reads a git repository's commit history, parses each commit as a
@@ -72,6 +74,7 @@ src/
   links.ts             commit/PR/issue link generation
   config.ts            config loading/merging/defaults
   engine.ts            orchestrates the above into ChangelogData
+  index.ts             library entry point (re-exports the modules)
   prepend.ts           insert a release into an existing CHANGELOG.md
   render/
     markdown.ts        Keep a Changelog-shaped Markdown
@@ -96,17 +99,19 @@ npm ci && npm run build
 npm link            # puts `changelog-forge` on your PATH
 ```
 
-The `npx changelog-forge ...` lines below assume the linked command; run
-`changelog-forge ...` (or `node dist/cli.js ...`) instead.
+The examples below use the linked `changelog-forge` command; `node dist/cli.js ...` from the
+clone works too. Do not substitute `npx changelog-forge`: if the linked command is not found,
+`npx` falls back to downloading the unrelated registry package.
 
-Requires Node.js `^20 || ^22 || >=24` and the `git` binary on `PATH`.
+Requires Node.js `^20 || ^22 || >=24` and the `git` binary on `PATH`. CI runs on Ubuntu with
+Node 20, 22 and 24.
 
 ## Usage
 
 Run from inside a git repository (or point `--cwd` at one):
 
 ```bash
-npx changelog-forge --repo-url https://github.com/owner/repo
+changelog-forge --repo-url https://github.com/owner/repo
 ```
 
 This auto-detects the previous release tag (by semver, not creation date), reads commits from
@@ -114,19 +119,19 @@ there to `HEAD`, and prints a Markdown release section to stdout.
 
 ```bash
 # Explicit range
-npx changelog-forge --from v1.2.0 --to v1.3.0 --repo-url https://github.com/owner/repo
+changelog-forge --from v1.2.0 --to v1.3.0 --repo-url https://github.com/owner/repo
 
 # JSON output
-npx changelog-forge --format json --out changelog.json
+changelog-forge --format json --out changelog.json
 
 # Insert into (or create) CHANGELOG.md, above previous releases
-npx changelog-forge --repo-url https://github.com/owner/repo --prepend
+changelog-forge --repo-url https://github.com/owner/repo --prepend
 
 # Include normally-excluded types
-npx changelog-forge --include chore,ci
+changelog-forge --include chore,ci
 
 # Override the inferred version
-npx changelog-forge --version 2.0.0
+changelog-forge --version 2.0.0
 ```
 
 ### CLI options
@@ -216,7 +221,8 @@ _Recommended bump: **major**._
 ```
 
 Note that the newest commit (`fix(auth)`) is not listed first: sections are ordered by
-impact, not commit date — breaking changes always lead.
+impact, not commit date — breaking changes always lead. The date and commit SHAs come from your
+repository, so they will differ.
 
 ## Output format
 
@@ -231,9 +237,10 @@ shape (`version`, `bump`, `date`, `from`, `to`, `sections[].groups[].entries[]`,
 ## Testing
 
 ```bash
-npm test          # vitest run — 145 tests
-npx tsc --noEmit   # strict type-check
-npx eslint .        # zero errors, zero warnings
+npm test            # vitest run — 145 tests in 16 files
+npm run typecheck   # tsc --noEmit, strict
+npm run lint        # eslint ., zero errors, zero warnings
+npm run build       # tsc -p tsconfig.build.json -> dist/
 ```
 
 Parsing, grouping, version inference, revert cancellation, and rendering are all tested against
@@ -254,6 +261,15 @@ the in-memory `FixtureGitReader` — no repository required. `test/git/RealGitRe
   cannot make `git log` run a signature program.
 - Report a security issue privately as described in [SECURITY.md](SECURITY.md) rather than in
   a public issue.
+
+## Limitations
+
+- The version in the heading is inferred only when the range starts at an auto-detected
+  release tag. With an explicit `--from <tag>`, the heading is `## [Unreleased]` (the
+  recommended bump is still printed); pass `--version` to set it.
+- With no semver tag in the repository, the whole history up to `--to` is read.
+- Commits that are not Conventional Commits are left out of the sections and listed under
+  `skipped` in JSON output.
 
 ## License
 
