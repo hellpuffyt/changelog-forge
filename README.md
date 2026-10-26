@@ -3,7 +3,60 @@
 Generate a release changelog from conventional commits, grouped by impact, with breaking
 changes surfaced first.
 
-<img src="docs/assets/overview.svg" width="100%" alt="Data-flow diagram: RealGitReader reads tags and commits from git; engine.ts finds the previous tag by semver, parses conventional commits, cancels reverts, infers the bump, groups by impact and scope, and collects contributors; the result is rendered as Markdown or JSON to stdout, a file, or prepended into CHANGELOG.md">
+## Demo
+
+<img src="docs/screenshots/changelog-forge-breaking-change-release.png" width="100%" alt="Terminal capture: git log shows five commits since v1.0.0; changelog-forge prints a 2.0.0 section recommending a major bump, with the breaking api change and its migration note first, then bug fixes grouped by scope, then performance, and Demo User as the only contributor">
+
+Terminal capture of a real run in a throwaway repository tagged `v1.0.0`, with five commits since.
+The `chore:` commit is excluded, the breaking change leads with its migration note, and the
+`dependabot[bot]` author is left out of Contributors.
+
+<details>
+<summary>Same output as text</summary>
+
+```console
+$ git log --oneline v1.0.0..HEAD
+5d9d164 fix(deps): bump lodash from 4.17.20 to 4.17.21
+0505b07 fix(auth): handle expired session (#12)
+906a455 feat(api)!: change response envelope
+c9ae1cc chore: bump dev dependencies
+dad0c08 perf(db): add index on user id
+
+$ changelog-forge --repo-url https://github.com/owner/repo
+## [2.0.0] - 2026-10-26
+
+_Recommended bump: **major**._
+
+### BREAKING CHANGES
+
+#### api
+
+- change response envelope ([`906a455`](https://github.com/owner/repo/commit/906a455bf544441bdee1f2f4a4576e237d9d592d))
+
+  responses are now wrapped in a `data` key.
+
+### Bug Fixes
+
+#### auth
+
+- handle expired session (#12) ([#12](https://github.com/owner/repo/pull/12) [`0505b07`](https://github.com/owner/repo/commit/0505b07538bdb096af35043ad9609c12ef33af03))
+
+#### deps
+
+- bump lodash from 4.17.20 to 4.17.21 ([`5d9d164`](https://github.com/owner/repo/commit/5d9d164a6a4ff6251dd30d8aa6172f040d7e0ab6))
+
+### Performance Improvements
+
+#### db
+
+- add index on user id ([`dad0c08`](https://github.com/owner/repo/commit/dad0c0827eb02fc3c37765c96ce2c2a202e2435a))
+
+### Contributors
+
+- Demo User
+```
+
+</details>
 
 ## What it does
 
@@ -47,6 +100,10 @@ needs the breaking changes and their migration notes first, so this tool puts th
   `CHANGELOG.md` above previous releases without disturbing them.
 
 ## Architecture
+
+<img src="docs/assets/overview.svg" width="100%" alt="Data-flow diagram: RealGitReader reads tags and commits from git; engine.ts finds the previous tag by semver, parses conventional commits, cancels reverts, infers the bump, groups by impact and scope, and collects contributors; the result is rendered as Markdown or JSON to stdout, a file, or prepended into CHANGELOG.md">
+
+Diagram (not a screenshot): from git tags and commits to Markdown or JSON output.
 
 Git access sits behind a `GitReader` interface (`src/git/GitReader.ts`) with two
 implementations:
