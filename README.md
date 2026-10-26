@@ -3,7 +3,9 @@
 Generate a release changelog from conventional commits, grouped by impact, with breaking
 changes surfaced first.
 
-## What
+<img src="docs/assets/overview.svg" width="100%" alt="Data-flow diagram: RealGitReader reads tags and commits from git; engine.ts finds the previous tag by semver, parses conventional commits, cancels reverts, infers the bump, groups by impact and scope, and collects contributors; the result is rendered as Markdown or JSON to stdout, a file, or prepended into CHANGELOG.md">
+
+## What it does
 
 `changelog-forge` reads a git repository's commit history, parses each commit as a
 [Conventional Commit](https://www.conventionalcommits.org/), and produces a changelog ordered
@@ -12,20 +14,19 @@ then features, then fixes, then performance improvements, reverts, and deprecati
 types (`chore`, `ci`, `style`, `test`) are excluded by default. It also infers the semver bump
 the release implies, and can write Markdown (Keep a Changelog shape) or JSON.
 
-## Why
+## Why use it
 
-Most changelog generators emit a flat list of commit subjects in commit order. That buries the
-one breaking change under forty `chore:` entries, which defeats the actual purpose of a
-changelog: letting a reader decide, in a few seconds, whether it's safe to upgrade. A changelog
-that doesn't lead with what breaks isn't doing its job.
+Many changelog generators print commit subjects in commit order, so a single breaking change
+can end up below dozens of `chore:` entries. A reader deciding whether it is safe to upgrade
+needs the breaking changes and their migration notes first, so this tool puts them first.
 
 ## Features
 
-- **Full conventional-commit parsing**: `type(scope)!: subject`, body, and git-trailer-style
+- **Conventional-commit parsing**: `type(scope)!: subject`, body, and git-trailer-style
   footers, including folded (multi-line) footer values.
 - **Both breaking-change notations**: the `!` marker after the type/scope, and a
-  `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer — tools that only support one of these
-  routinely miss real breaking changes.
+  `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. Tools that only support one of these
+  miss breaking changes written the other way.
 - **Impact ordering**: breaking changes surfaced first with migration notes, then features,
   fixes, performance, reverts, deprecations. `chore`/`ci`/`style`/`test` are excluded by
   default but can be included.
@@ -35,7 +36,7 @@ that doesn't lead with what breaks isn't doing its job.
   `feat` → minor, else any `fix`/`perf` → patch. The recommended bump is printed in the output.
 - **Range selection**: explicit `--from`/`--to` refs, or auto-detection of the previous release
   by **semver ordering**, not tag creation date (which is wrong when tags are pushed out of
-  order — e.g. a `1.2.0` hotfix tag pushed after a `1.3.0-rc.1` prerelease tag).
+  order, e.g. a `1.2.0` hotfix tag pushed after a `1.3.0-rc.1` prerelease tag).
 - **Revert cancellation**: a commit and its revert, when both are in the range, cancel out
   instead of both appearing. Both `revert: <header>` and the default `git revert` message
   (`Revert "<header>"` + `This reverts commit <sha>.`) are recognised.
@@ -50,14 +51,14 @@ that doesn't lead with what breaks isn't doing its job.
 Git access sits behind a `GitReader` interface (`src/git/GitReader.ts`) with two
 implementations:
 
-- `RealGitReader` — shells out to the system `git` binary against a real repository.
-- `FixtureGitReader` — an in-memory reader for tests, given commits and tags directly.
+- `RealGitReader`: shells out to the system `git` binary against a real repository.
+- `FixtureGitReader`: an in-memory reader for tests, given commits and tags directly.
 
-Everything downstream of `GitReader` — conventional-commit parsing (`src/parser.ts`), revert
-cancellation (`src/revert.ts`), version inference (`src/version.ts`), impact-ordered grouping
+Everything downstream of `GitReader` is pure logic over plain data, so it can be unit-tested
+without a repository: conventional-commit parsing (`src/parser.ts`), revert cancellation
+(`src/revert.ts`), version inference (`src/version.ts`), impact-ordered grouping
 (`src/grouping.ts`), contributor collection (`src/contributors.ts`), link generation
-(`src/links.ts`), and rendering (`src/render/`) — is pure logic over plain data, so it is fully
-unit-testable with no repository at all. `src/engine.ts` wires it together;
+(`src/links.ts`) and rendering (`src/render/`). `src/engine.ts` wires it together;
 `src/cli.ts` is the command-line entry point.
 
 ```
@@ -72,6 +73,7 @@ src/
   links.ts             commit/PR/issue link generation
   config.ts            config loading/merging/defaults
   engine.ts            orchestrates the above into ChangelogData
+  index.ts             library entry point (re-exports the modules)
   prepend.ts           insert a release into an existing CHANGELOG.md
   render/
     markdown.ts        Keep a Changelog-shaped Markdown
@@ -86,7 +88,7 @@ src/
 ## Installation
 
 This project is **not published to npm**. The `changelog-forge` package on the npm
-registry is an unrelated project by another author — do not `npm install` it or run
+registry is an unrelated project by another author; do not `npm install` it or run
 `npx changelog-forge` expecting this tool. Install from a clone:
 
 ```bash
@@ -96,17 +98,19 @@ npm ci && npm run build
 npm link            # puts `changelog-forge` on your PATH
 ```
 
-The `npx changelog-forge ...` lines below assume the linked command; run
-`changelog-forge ...` (or `node dist/cli.js ...`) instead.
+The examples below use the linked `changelog-forge` command; `node dist/cli.js ...` from the
+clone works too. Do not substitute `npx changelog-forge`: if the linked command is not found,
+`npx` falls back to downloading the unrelated registry package.
 
-Requires Node.js `^20 || ^22 || >=24` and the `git` binary on `PATH`.
+Requires Node.js `^20 || ^22 || >=24` and the `git` binary on `PATH`. CI runs on Ubuntu with
+Node 20, 22 and 24.
 
 ## Usage
 
 Run from inside a git repository (or point `--cwd` at one):
 
 ```bash
-npx changelog-forge --repo-url https://github.com/owner/repo
+changelog-forge --repo-url https://github.com/owner/repo
 ```
 
 This auto-detects the previous release tag (by semver, not creation date), reads commits from
@@ -114,19 +118,19 @@ there to `HEAD`, and prints a Markdown release section to stdout.
 
 ```bash
 # Explicit range
-npx changelog-forge --from v1.2.0 --to v1.3.0 --repo-url https://github.com/owner/repo
+changelog-forge --from v1.2.0 --to v1.3.0 --repo-url https://github.com/owner/repo
 
 # JSON output
-npx changelog-forge --format json --out changelog.json
+changelog-forge --format json --out changelog.json
 
 # Insert into (or create) CHANGELOG.md, above previous releases
-npx changelog-forge --repo-url https://github.com/owner/repo --prepend
+changelog-forge --repo-url https://github.com/owner/repo --prepend
 
 # Include normally-excluded types
-npx changelog-forge --include chore,ci
+changelog-forge --include chore,ci
 
 # Override the inferred version
-npx changelog-forge --version 2.0.0
+changelog-forge --version 2.0.0
 ```
 
 ### CLI options
@@ -162,13 +166,13 @@ Pass `--config path/to/config.json`:
 }
 ```
 
-- `scopeAliases` — maps a raw commit scope to a canonical display scope; commits sharing a
+- `scopeAliases`: maps a raw commit scope to a canonical display scope; commits sharing a
   canonical scope are grouped together.
-- `botPatterns` — case-insensitive regular expressions tested against contributor name and
+- `botPatterns`: case-insensitive regular expressions tested against contributor name and
   email; matches are excluded from the contributor list.
-- `excludeTypes` — commit types dropped from the output entirely (breaking changes are never
+- `excludeTypes`: commit types dropped from the output entirely (breaking changes are never
   dropped, even if their type is excluded).
-- `includeTypes` — types to keep even if listed in `excludeTypes` (also settable per-run with
+- `includeTypes`: types to keep even if listed in `excludeTypes` (also settable per-run with
   `--include`).
 
 ## Examples
@@ -216,7 +220,8 @@ _Recommended bump: **major**._
 ```
 
 Note that the newest commit (`fix(auth)`) is not listed first: sections are ordered by
-impact, not commit date — breaking changes always lead.
+impact, not commit date, and breaking changes always lead. The date and commit SHAs come from your
+repository, so they will differ.
 
 ## Output format
 
@@ -224,20 +229,21 @@ impact, not commit date — breaking changes always lead.
 - date` heading, `### Section` headings in impact order, and `#### scope` subheadings within a
 section when commits carry a scope. Unscoped commits in a section are listed first.
 
-**JSON** mirrors the same structure programmatically — see `src/render/json.ts` for the exact
+**JSON** mirrors the same structure programmatically; see `src/render/json.ts` for the exact
 shape (`version`, `bump`, `date`, `from`, `to`, `sections[].groups[].entries[]`, `contributors`,
 `skipped`).
 
 ## Testing
 
 ```bash
-npm test          # vitest run — 145 tests
-npx tsc --noEmit   # strict type-check
-npx eslint .        # zero errors, zero warnings
+npm test            # vitest run, 145 tests in 16 files
+npm run typecheck   # tsc --noEmit, strict
+npm run lint        # eslint ., zero errors, zero warnings
+npm run build       # tsc -p tsconfig.build.json -> dist/
 ```
 
 Parsing, grouping, version inference, revert cancellation, and rendering are all tested against
-the in-memory `FixtureGitReader` — no repository required. `test/git/RealGitReader.test.ts` and
+the in-memory `FixtureGitReader`, with no repository required. `test/git/RealGitReader.test.ts` and
 `test/cli.test.ts` create a real temporary repository with `git init` and exercise the actual
 `git` binary end to end.
 
@@ -255,6 +261,19 @@ the in-memory `FixtureGitReader` — no repository required. `test/git/RealGitRe
 - Report a security issue privately as described in [SECURITY.md](SECURITY.md) rather than in
   a public issue.
 
+## Limitations
+
+- The version in the heading is inferred only when the range starts at an auto-detected
+  release tag. With an explicit `--from <tag>`, the heading is `## [Unreleased]` (the
+  recommended bump is still printed); pass `--version` to set it.
+- With no semver tag in the repository, the whole history up to `--to` is read.
+- Commits that are not Conventional Commits are left out of the sections and listed under
+  `skipped` in JSON output.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).
